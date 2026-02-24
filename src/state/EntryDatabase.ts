@@ -61,8 +61,13 @@ export class EntryDatabase {
     this.arenaMap = new Map(this.arenas.map((a) => [a.id, a]));
   }
 
+  private static VISIBLE_ARENAS = new Set([
+    "top-100-alternative-albums",
+    "imdb-top-100-movies",
+  ]);
+
   getAllArenas(): Arena[] {
-    return this.arenas;
+    return this.arenas.filter(a => EntryDatabase.VISIBLE_ARENAS.has(a.id));
   }
 
   getArena(arenaId: string): Arena | undefined {

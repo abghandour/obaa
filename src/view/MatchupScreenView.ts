@@ -39,6 +39,7 @@ export class MatchupScreenView {
   private passButtonElement: HTMLButtonElement | null = null;
   private passRow: HTMLDivElement | null = null;
   private topBar: HTMLDivElement | null = null;
+  private battleLabel: HTMLSpanElement | null = null;
 
   constructor(container?: HTMLElement) {
     this.container = container ?? document.getElementById("app") ?? document.body;
@@ -57,7 +58,12 @@ export class MatchupScreenView {
     this.recordButton.innerHTML = active ? `${iconStop}<span>Stop</span>` : `${iconRecord}<span>Record</span>`;
     this.recordButton.classList.toggle("recording", active);
     if (this.battleCounter) {
-      this.battleCounter.textContent = active ? "0" : "";
+      if (!active) {
+        this.battleCounter.textContent = "";
+        if (this.battleLabel) this.battleLabel.style.display = "none";
+      } else if (this.battleLabel) {
+        this.battleLabel.style.display = "";
+      }
     }
     if (this.topBar) {
       this.topBar.classList.toggle("disabled", active);
@@ -100,8 +106,17 @@ export class MatchupScreenView {
     counter.className = "battle-counter";
     counter.textContent = "";
     this.battleCounter = counter;
+    const label = document.createElement("span");
+    label.className = "battle-label";
+    label.textContent = "Matches";
+    label.style.display = "none";
+    this.battleLabel = label;
     this.recordRow.appendChild(recordButton);
-    this.recordRow.appendChild(counter);
+    const meta = document.createElement("div");
+    meta.className = "record-meta";
+    meta.appendChild(label);
+    meta.appendChild(counter);
+    this.recordRow.appendChild(meta);
     if (this.passButtonElement) this.passButtonElement.style.display = "";
     if (this.passRow) this.passRow.style.display = "";
   }
@@ -145,24 +160,30 @@ export class MatchupScreenView {
 
     const labelsRow = document.createElement("div");
     labelsRow.className = "labels-row";
+
+    const colA = document.createElement("div");
+    colA.className = "label-col";
     const labelA = document.createElement("span");
     labelA.className = "option-label";
-    labelA.textContent = optionA.name;
-    const labelB = document.createElement("span");
-    labelB.className = "option-label";
-    labelB.textContent = optionB.name;
-    labelsRow.appendChild(labelA);
-    labelsRow.appendChild(labelB);
-    this.container.appendChild(labelsRow);
-
-    const passRow = document.createElement("div");
-    passRow.className = "pass-row";
-
+    labelA.innerHTML = optionA.name.replace(/\s*-\s*/g, "<br>");
     const ignoreLeftBtn = document.createElement("button");
     ignoreLeftBtn.className = "ignore-button";
     ignoreLeftBtn.innerHTML = `${iconBan}<span>Don't Know</span>`;
     ignoreLeftBtn.addEventListener("click", () => this.ignoreCallback?.("a"));
     addRipple(ignoreLeftBtn);
+    colA.append(labelA, ignoreLeftBtn);
+
+    const colB = document.createElement("div");
+    colB.className = "label-col";
+    const labelB = document.createElement("span");
+    labelB.className = "option-label";
+    labelB.innerHTML = optionB.name.replace(/\s*-\s*/g, "<br>");
+    const ignoreRightBtn = document.createElement("button");
+    ignoreRightBtn.className = "ignore-button";
+    ignoreRightBtn.innerHTML = `${iconBan}<span>Don't Know</span>`;
+    ignoreRightBtn.addEventListener("click", () => this.ignoreCallback?.("b"));
+    addRipple(ignoreRightBtn);
+    colB.append(labelB, ignoreRightBtn);
 
     const passButton = document.createElement("button");
     passButton.className = "pass-button";
@@ -171,15 +192,9 @@ export class MatchupScreenView {
     addRipple(passButton);
     this.passButtonElement = passButton;
 
-    const ignoreRightBtn = document.createElement("button");
-    ignoreRightBtn.className = "ignore-button";
-    ignoreRightBtn.innerHTML = `${iconBan}<span>Don't Know</span>`;
-    ignoreRightBtn.addEventListener("click", () => this.ignoreCallback?.("b"));
-    addRipple(ignoreRightBtn);
-
-    passRow.append(ignoreLeftBtn, passButton, ignoreRightBtn);
-    this.passRow = passRow;
-    this.container.appendChild(passRow);
+    labelsRow.append(colA, colB);
+    this.passRow = labelsRow;
+    this.container.appendChild(labelsRow);
 
     this.optionAImage = this.optionAElement.querySelector<HTMLImageElement>(".option-image");
     this.optionBImage = this.optionBElement.querySelector<HTMLImageElement>(".option-image");
@@ -211,8 +226,19 @@ export class MatchupScreenView {
     counter.textContent = "";
     this.battleCounter = counter;
 
+    const label = document.createElement("span");
+    label.className = "battle-label";
+    label.textContent = "Matches";
+    label.style.display = "none";
+    this.battleLabel = label;
+
     recordRow.appendChild(recordButton);
-    recordRow.appendChild(counter);
+
+    const meta = document.createElement("div");
+    meta.className = "record-meta";
+    meta.appendChild(label);
+    meta.appendChild(counter);
+    recordRow.appendChild(meta);
     this.container.appendChild(recordRow);
   }
 
@@ -372,12 +398,12 @@ export class MatchupScreenView {
       const tdA = document.createElement("td");
       tdA.textContent = m.entryA;
       const tdAx = document.createElement("td");
-      tdAx.textContent = m.winner === m.entryA ? "✗" : "";
+      tdAx.textContent = m.winner === m.entryA ? "✓" : "";
       tdAx.className = "winner-mark";
       const tdB = document.createElement("td");
       tdB.textContent = m.entryB;
       const tdBx = document.createElement("td");
-      tdBx.textContent = m.winner === m.entryB ? "✗" : "";
+      tdBx.textContent = m.winner === m.entryB ? "✓" : "";
       tdBx.className = "winner-mark";
       tr.append(tdA, tdAx, tdB, tdBx);
       table.appendChild(tr);
@@ -549,6 +575,89 @@ export class MatchupScreenView {
   getOptionBElement(): HTMLDivElement | null { return this.optionBElement; }
   getOptionAImage(): HTMLImageElement | null { return this.optionAImage; }
   getOptionBImage(): HTMLImageElement | null { return this.optionBImage; }
+
+  /** Set a temporary background image on the matchup area (used during slide-down transitions). */
+  setMatchupBackground(imageUrl: string | null): void {
+    const area = this.container.querySelector<HTMLElement>(".matchup-area");
+    if (!area) return;
+    if (imageUrl) {
+      area.style.backgroundImage = `url(${imageUrl})`;
+      area.style.backgroundSize = "cover";
+      area.style.backgroundPosition = "center";
+    } else {
+      area.style.backgroundImage = "";
+      area.style.backgroundSize = "";
+      area.style.backgroundPosition = "";
+    }
+  }
+
+  /**
+   * Swap the option entries inside the existing matchup area.
+   * Old options stay visible underneath while new ones are added on top
+   * (ready for a slide-down animation). Also updates labels.
+   * Returns the new option elements for animation.
+   */
+  swapMatchupEntries(optionA: Entry, optionB: Entry): { newA: HTMLDivElement; newB: HTMLDivElement } {
+    const area = this.container.querySelector<HTMLElement>(".matchup-area");
+    if (!area) throw new Error("No matchup area found");
+
+    // Make old options fully visible as background (remove clip-path)
+    if (this.optionAElement) {
+      this.optionAElement.style.clipPath = "none";
+      this.optionAElement.style.zIndex = "1";
+    }
+    if (this.optionBElement) {
+      this.optionBElement.style.clipPath = "none";
+      this.optionBElement.style.zIndex = "1";
+    }
+
+    // Create new option elements on top with curtain clip-path so both
+    // halves are visible side-by-side as they slide down together.
+    const newA = this.createOptionElement(optionA, "a");
+    const newB = this.createOptionElement(optionB, "b");
+    newA.style.clipPath = "inset(0 50% 0 0)";
+    newB.style.clipPath = "inset(0 0 0 50%)";
+    newA.style.zIndex = "10";
+    newB.style.zIndex = "10";
+
+    area.appendChild(newA);
+    area.appendChild(newB);
+
+    // Update labels
+    const labels = this.container.querySelectorAll<HTMLElement>(".option-label");
+    if (labels[0]) labels[0].innerHTML = optionA.name.replace(/\s*-\s*/g, "<br>");
+    if (labels[1]) labels[1].innerHTML = optionB.name.replace(/\s*-\s*/g, "<br>");
+
+    // Store references — old elements will be cleaned up after animation
+    this.optionAElement = newA;
+    this.optionBElement = newB;
+    this.optionAImage = newA.querySelector<HTMLImageElement>(".option-image");
+    this.optionBImage = newB.querySelector<HTMLImageElement>(".option-image");
+
+    return { newA, newB };
+  }
+
+  /**
+   * Remove old (stale) option containers from the matchup area,
+   * keeping only the current ones. Restores curtain clip-path
+   * and re-attaches the swipe handler.
+   */
+  cleanupOldOptions(): void {
+    const area = this.container.querySelector<HTMLElement>(".matchup-area");
+    if (!area) return;
+    const allContainers = area.querySelectorAll<HTMLElement>(".option-container");
+    // Keep only the last two (the new ones)
+    for (let i = 0; i < allContainers.length - 2; i++) {
+      allContainers[i]!.remove();
+    }
+    // Reset z-index now that old elements are gone
+    if (this.optionAElement) {
+      this.optionAElement.style.zIndex = "1";
+    }
+    if (this.optionBElement) {
+      this.optionBElement.style.zIndex = "1";
+    }
+  }
 
   private createOptionElement(entry: Entry, side: "a" | "b"): HTMLDivElement {
     const el = document.createElement("div");

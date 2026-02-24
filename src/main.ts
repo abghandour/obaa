@@ -128,6 +128,37 @@ async function main() {
     if (winnerElement) {
       await animationController.playSelectionHighlight(winnerElement);
     }
+
+    // --- Recording mode: skip exit animations, slide new entries down ---
+    if (recording.active) {
+      const freshMatchup = matchupEngine.pickInitialMatchup(gameState.selectedArenaId, gameState.ignoredEntries);
+      if (freshMatchup) {
+        const arena = entryDb.getArena(gameState.selectedArenaId);
+        if (arena) {
+          gameState.currentMatchup = freshMatchup;
+          await matchupScreenView.preloadEntries(freshMatchup.optionA, freshMatchup.optionB);
+
+          // Swap entries in-place — old options stay visible underneath
+          const { newA, newB } = matchupScreenView.swapMatchupEntries(freshMatchup.optionA, freshMatchup.optionB);
+
+          // Re-wire tap callbacks on the new elements
+          wireGameplayLoop();
+
+          // Slide new entries down from top over the old ones
+          await animationController.playSlideDownEntrance(newA, newB);
+
+          // Remove the old option elements now hidden behind the new ones
+          matchupScreenView.cleanupOldOptions();
+
+          gameState.isTransitioning = false;
+          return;
+        }
+      }
+      gameState.isTransitioning = false;
+      await stopRecordingAndShare();
+      return;
+    }
+
     if (loserElement) {
       await animationController.playLoserExit(loserElement, loserSide);
     }
@@ -185,26 +216,6 @@ async function main() {
     const nextContender = matchupEngine.pickNextContender(gameState.selectedArenaId, winner, gameState.ignoredEntries);
 
     if (!nextContender) {
-      // If recording, try a fresh random matchup instead of stopping
-      if (recording.active) {
-        const freshMatchup = matchupEngine.pickInitialMatchup(gameState.selectedArenaId, gameState.ignoredEntries);
-        if (freshMatchup) {
-          const arena = entryDb.getArena(gameState.selectedArenaId);
-          if (arena) {
-            gameState.currentMatchup = freshMatchup;
-            await matchupScreenView.preloadEntries(freshMatchup.optionA, freshMatchup.optionB);
-            matchupScreenView.render(arena.battleground, arena.name, freshMatchup.optionA, freshMatchup.optionB);
-            wireGameplayLoop();
-            gameState.isTransitioning = false;
-            return;
-          }
-        }
-        // Truly exhausted while recording — auto-stop and show share
-        gameState.isTransitioning = false;
-        await stopRecordingAndShare();
-        return;
-      }
-
       // Not recording — show exhausted message and navigate back
       const arena = entryDb.getArena(gameState.selectedArenaId);
       const arenaName = arena?.name ?? "this arena";
@@ -404,6 +415,7 @@ async function main() {
 
       recording.start();
       matchupScreenView.setRecording(true);
+      matchupScreenView.updateBattleCount(0);
 
       // Pick a fresh matchup
       const matchup = matchupEngine.pickInitialMatchup(gameState.selectedArenaId, gameState.ignoredEntries);
@@ -425,6 +437,7 @@ async function main() {
     // Update record button state if recording is active
     if (recording.active) {
       matchupScreenView.setRecording(true);
+      matchupScreenView.updateBattleCount(recording.recordedMatches.length);
     }
   }
 

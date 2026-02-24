@@ -80,6 +80,17 @@ export class AnimationController {
     return this.animate(element, "anim-snap-back");
   }
 
+  /**
+   * Slide both new options down from the top of the matchup area.
+   * Plays the "contenderAppear" sound effect.
+   */
+  playSlideDownEntrance(elementA: HTMLElement, elementB: HTMLElement): Promise<void> {
+    this.audio.play("contenderAppear");
+    const pA = this.animate(elementA, "anim-slide-down-entrance");
+    const pB = this.animate(elementB, "anim-slide-down-entrance");
+    return Promise.all([pA, pB]).then(() => {});
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helper
   // ---------------------------------------------------------------------------

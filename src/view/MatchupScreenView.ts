@@ -1,8 +1,12 @@
 import type { Entry } from "../types/index";
 import type { RecordedMatch } from "../logic/RecordingSession";
-import { AdBannerView } from "./AdBannerView";
 import { SwipeHandler } from "../logic/SwipeHandler";
 import type { CurtainState } from "../logic/SwipeHandler";
+import {
+  iconTrophy, iconClipboard, iconMessage, iconShare,
+  iconSkip, iconBan, iconRecord, iconStop,
+  iconClose, iconTrash, addRipple, verdictIcon,
+} from "./icons";
 
 function preloadImage(url: string): Promise<void> {
   return new Promise((resolve) => {
@@ -15,7 +19,6 @@ function preloadImage(url: string): Promise<void> {
 
 export class MatchupScreenView {
   private container: HTMLElement;
-  private adBanner = new AdBannerView();
   private swipeHandler = new SwipeHandler();
 
   private optionAElement: HTMLDivElement | null = null;
@@ -34,45 +37,29 @@ export class MatchupScreenView {
   private recordRow: HTMLDivElement | null = null;
   private passButtonElement: HTMLButtonElement | null = null;
   private passRow: HTMLDivElement | null = null;
+  private topBar: HTMLDivElement | null = null;
 
   constructor(container?: HTMLElement) {
     this.container = container ?? document.getElementById("app") ?? document.body;
   }
 
-  onOptionTap(callback: (option: "a" | "b") => void): void {
-    this.tapCallback = callback;
-  }
-
-  onPass(callback: () => void): void {
-    this.passCallback = callback;
-  }
-
-  onHeaderClick(callback: () => void): void {
-    this.headerClickCallback = callback;
-  }
-
-  onResultsClick(callback: () => void): void {
-    this.resultsCallback = callback;
-  }
-
-  onRecord(callback: () => void): void {
-    this.recordCallback = callback;
-  }
-
-  onStop(callback: () => void): void {
-    this.stopCallback = callback;
-  }
-
-  onIgnore(callback: (side: "a" | "b") => void): void {
-    this.ignoreCallback = callback;
-  }
+  onOptionTap(callback: (option: "a" | "b") => void): void { this.tapCallback = callback; }
+  onPass(callback: () => void): void { this.passCallback = callback; }
+  onHeaderClick(callback: () => void): void { this.headerClickCallback = callback; }
+  onResultsClick(callback: () => void): void { this.resultsCallback = callback; }
+  onRecord(callback: () => void): void { this.recordCallback = callback; }
+  onStop(callback: () => void): void { this.stopCallback = callback; }
+  onIgnore(callback: (side: "a" | "b") => void): void { this.ignoreCallback = callback; }
 
   setRecording(active: boolean): void {
     if (!this.recordButton) return;
-    this.recordButton.textContent = active ? "Stop" : "Record";
+    this.recordButton.innerHTML = active ? `${iconStop}<span>Stop</span>` : `${iconRecord}<span>Record</span>`;
     this.recordButton.classList.toggle("recording", active);
     if (this.battleCounter) {
       this.battleCounter.textContent = active ? "0" : "";
+    }
+    if (this.topBar) {
+      this.topBar.classList.toggle("disabled", active);
     }
   }
 
@@ -98,7 +85,7 @@ export class MatchupScreenView {
     this.recordRow.innerHTML = "";
     const recordButton = document.createElement("button");
     recordButton.className = "record-button";
-    recordButton.textContent = "Record";
+    recordButton.innerHTML = `${iconRecord}<span>Record</span>`;
     recordButton.addEventListener("click", () => {
       if (recordButton.classList.contains("recording")) {
         this.stopCallback?.();
@@ -106,6 +93,7 @@ export class MatchupScreenView {
         this.recordCallback?.();
       }
     });
+    addRipple(recordButton);
     this.recordButton = recordButton;
     const counter = document.createElement("span");
     counter.className = "battle-counter";
@@ -129,18 +117,20 @@ export class MatchupScreenView {
 
     const header = document.createElement("h1");
     header.className = "matchup-header";
-    header.textContent = `${battleground} > ${arena}`;
+    header.textContent = `${battleground} › ${arena}`;
     header.style.cursor = "pointer";
     header.addEventListener("click", () => this.headerClickCallback?.());
 
     const resultsBtn = document.createElement("button");
     resultsBtn.className = "results-button";
-    resultsBtn.textContent = "🏆";
+    resultsBtn.innerHTML = iconTrophy;
     resultsBtn.title = "Results";
     resultsBtn.addEventListener("click", () => this.resultsCallback?.());
+    addRipple(resultsBtn);
 
     topBar.appendChild(header);
     topBar.appendChild(resultsBtn);
+    this.topBar = topBar;
     this.container.appendChild(topBar);
 
     const matchupArea = document.createElement("div");
@@ -169,19 +159,22 @@ export class MatchupScreenView {
 
     const ignoreLeftBtn = document.createElement("button");
     ignoreLeftBtn.className = "ignore-button";
-    ignoreLeftBtn.textContent = "Ignore";
+    ignoreLeftBtn.innerHTML = `${iconBan}<span>Don't Know</span>`;
     ignoreLeftBtn.addEventListener("click", () => this.ignoreCallback?.("a"));
+    addRipple(ignoreLeftBtn);
 
     const passButton = document.createElement("button");
     passButton.className = "pass-button";
-    passButton.textContent = "Pass";
+    passButton.innerHTML = `${iconSkip}<span>Pass</span>`;
     passButton.addEventListener("click", () => this.passCallback?.());
+    addRipple(passButton);
     this.passButtonElement = passButton;
 
     const ignoreRightBtn = document.createElement("button");
     ignoreRightBtn.className = "ignore-button";
-    ignoreRightBtn.textContent = "Ignore";
+    ignoreRightBtn.innerHTML = `${iconBan}<span>Don't Know</span>`;
     ignoreRightBtn.addEventListener("click", () => this.ignoreCallback?.("b"));
+    addRipple(ignoreRightBtn);
 
     passRow.append(ignoreLeftBtn, passButton, ignoreRightBtn);
     this.passRow = passRow;
@@ -201,7 +194,7 @@ export class MatchupScreenView {
 
     const recordButton = document.createElement("button");
     recordButton.className = "record-button";
-    recordButton.textContent = "Record";
+    recordButton.innerHTML = `${iconRecord}<span>Record</span>`;
     recordButton.addEventListener("click", () => {
       if (recordButton.classList.contains("recording")) {
         this.stopCallback?.();
@@ -209,6 +202,7 @@ export class MatchupScreenView {
         this.recordCallback?.();
       }
     });
+    addRipple(recordButton);
     this.recordButton = recordButton;
 
     const counter = document.createElement("span");
@@ -219,8 +213,6 @@ export class MatchupScreenView {
     recordRow.appendChild(recordButton);
     recordRow.appendChild(counter);
     this.container.appendChild(recordRow);
-
-    this.adBanner.render(this.container);
   }
 
   applyCurtainClip(state: CurtainState): void {
@@ -256,13 +248,7 @@ export class MatchupScreenView {
     }, 300);
   }
 
-  /**
-   * Show a modal overlay with battle results sorted by wins descending.
-   * @param results Array of { name, wins } sorted by wins desc.
-   * @param arenaName Display name for the modal title.
-   */
   showResultsModal(results: Array<{ name: string; wins: number }>, arenaName: string, onClearHistory?: () => void): void {
-    // Remove existing modal if any
     document.querySelector(".results-overlay")?.remove();
 
     const overlay = document.createElement("div");
@@ -302,31 +288,29 @@ export class MatchupScreenView {
     if (onClearHistory) {
       const clearBtn = document.createElement("button");
       clearBtn.className = "results-clear";
-      clearBtn.textContent = "Clear History";
+      clearBtn.innerHTML = `${iconTrash}<span>Clear History</span>`;
       clearBtn.addEventListener("click", () => {
         if (confirm(`Clear all battle history for ${arenaName}?`)) {
           onClearHistory();
           overlay.remove();
         }
       });
+      addRipple(clearBtn);
       btnRow.appendChild(clearBtn);
     }
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "results-close";
-    closeBtn.textContent = "Close";
+    closeBtn.innerHTML = `${iconClose}<span>Close</span>`;
     closeBtn.addEventListener("click", () => overlay.remove());
+    addRipple(closeBtn);
     btnRow.appendChild(closeBtn);
 
     modal.appendChild(btnRow);
-
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
   }
 
-  /**
-   * Show recording results modal with 4-column table and share button.
-   */
   showRecordingModal(matches: RecordedMatch[], arenaName: string, shareUrl: string, onCopy: () => void): void {
     document.querySelector(".results-overlay")?.remove();
 
@@ -350,27 +334,30 @@ export class MatchupScreenView {
 
     const copyBtn = document.createElement("button");
     copyBtn.className = "share-button";
-    copyBtn.textContent = "📋";
+    copyBtn.innerHTML = iconClipboard;
     copyBtn.title = "Copy link";
     copyBtn.addEventListener("click", () => onCopy());
+    addRipple(copyBtn);
 
     const messageText = `Hey I would like to battle you at ${arenaName} ${shareUrl}`;
 
     const msgBtn = document.createElement("button");
     msgBtn.className = "share-button";
-    msgBtn.textContent = "💬";
+    msgBtn.innerHTML = iconMessage;
     msgBtn.title = "Message";
     msgBtn.addEventListener("click", () => {
       window.open(`sms:?&body=${encodeURIComponent(messageText)}`, "_self");
     });
+    addRipple(msgBtn);
 
     const xBtn = document.createElement("button");
     xBtn.className = "share-button";
-    xBtn.textContent = "𝕏";
+    xBtn.innerHTML = iconShare;
     xBtn.title = "Post on X";
     xBtn.addEventListener("click", () => {
       window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(messageText)}`, "_blank");
     });
+    addRipple(xBtn);
 
     shareGroup.append(copyBtn, msgBtn, xBtn);
     titleRow.appendChild(title);
@@ -398,17 +385,15 @@ export class MatchupScreenView {
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "results-close";
-    closeBtn.textContent = "Close";
+    closeBtn.innerHTML = `${iconClose}<span>Close</span>`;
     closeBtn.addEventListener("click", () => overlay.remove());
+    addRipple(closeBtn);
     modal.appendChild(closeBtn);
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
   }
 
-  /**
-   * Show replay verdict modal with Jaccard similarity score.
-   */
   showReplayResult(score: number, verdict: string, matches: RecordedMatch[], userMatches: RecordedMatch[], arenaName: string, onClose?: () => void): void {
     document.querySelector(".results-overlay")?.remove();
 
@@ -423,7 +408,7 @@ export class MatchupScreenView {
 
     const title = document.createElement("h2");
     title.className = "results-title";
-    title.textContent = verdict;
+    title.innerHTML = `${verdictIcon(score)}${verdict}`;
     modal.appendChild(title);
 
     const scoreEl = document.createElement("div");
@@ -431,7 +416,6 @@ export class MatchupScreenView {
     scoreEl.textContent = `Jaccard Similarity: ${score}%`;
     modal.appendChild(scoreEl);
 
-    // Comparison table
     const table = document.createElement("table");
     table.className = "recording-table";
     const thead = document.createElement("tr");
@@ -455,7 +439,6 @@ export class MatchupScreenView {
     }
     modal.appendChild(table);
 
-    // Build text table of results
     const lines: string[] = [`${arenaName} — ${verdict} (${score}%)\n`];
     for (let i = 0; i < matches.length; i++) {
       const orig = matches[i]!;
@@ -470,7 +453,7 @@ export class MatchupScreenView {
 
     const copyBtn = document.createElement("button");
     copyBtn.className = "share-button";
-    copyBtn.textContent = "📋";
+    copyBtn.innerHTML = iconClipboard;
     copyBtn.title = "Copy results";
     copyBtn.addEventListener("click", async () => {
       try {
@@ -480,30 +463,34 @@ export class MatchupScreenView {
         prompt("Copy this:", resultText);
       }
     });
+    addRipple(copyBtn);
 
     const msgBtn = document.createElement("button");
     msgBtn.className = "share-button";
-    msgBtn.textContent = "💬";
+    msgBtn.innerHTML = iconMessage;
     msgBtn.title = "Message";
     msgBtn.addEventListener("click", () => {
       window.open(`sms:?&body=${encodeURIComponent(resultText)}`, "_self");
     });
+    addRipple(msgBtn);
 
     const xBtn = document.createElement("button");
     xBtn.className = "share-button";
-    xBtn.textContent = "𝕏";
+    xBtn.innerHTML = iconShare;
     xBtn.title = "Post on X";
     xBtn.addEventListener("click", () => {
       window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(resultText)}`, "_blank");
     });
+    addRipple(xBtn);
 
     shareGroup.append(copyBtn, msgBtn, xBtn);
     modal.appendChild(shareGroup);
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "results-close";
-    closeBtn.textContent = "Close";
+    closeBtn.innerHTML = `${iconClose}<span>Close</span>`;
     closeBtn.addEventListener("click", () => { overlay.remove(); onClose?.(); });
+    addRipple(closeBtn);
     modal.appendChild(closeBtn);
 
     overlay.appendChild(modal);
@@ -517,7 +504,6 @@ export class MatchupScreenView {
     msgElement.className = "exhausted-message";
     msgElement.textContent = message;
     this.container.appendChild(msgElement);
-    this.adBanner.render(this.container);
   }
 
   getSwipeHandler(): SwipeHandler { return this.swipeHandler; }

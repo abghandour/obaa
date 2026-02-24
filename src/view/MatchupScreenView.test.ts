@@ -18,7 +18,7 @@ describe("MatchupScreenView", () => {
   it("renders matchup header", () => {
     const view = new MatchupScreenView(container);
     view.render("Movies", "Actors", entryA, entryB);
-    expect(container.querySelector(".matchup-header")!.textContent).toBe("Movies > Actors");
+    expect(container.querySelector(".matchup-header")!.textContent).toBe("Movies › Actors");
   });
 
   it("renders both option containers", () => {
@@ -78,7 +78,7 @@ describe("MatchupScreenView", () => {
   it("renders a Pass button", () => {
     const view = new MatchupScreenView(container);
     view.render("Movies", "Actors", entryA, entryB);
-    expect(container.querySelector(".pass-button")!.textContent).toBe("Pass");
+    expect(container.querySelector(".pass-button")!.textContent).toContain("Pass");
   });
 
   it("fires onPass callback", () => {
@@ -116,11 +116,10 @@ describe("MatchupScreenView", () => {
     expect(container.querySelector(".matchup-area")).toBeNull();
   });
 
-  it("renders ad banner at the bottom", () => {
+  it("ad banner is no longer rendered (hidden)", () => {
     const view = new MatchupScreenView(container);
     view.render("Movies", "Actors", entryA, entryB);
-    expect(container.querySelector(".ad-banner")).not.toBeNull();
-    expect(container.lastElementChild).toBe(container.querySelector(".ad-banner"));
+    expect(container.querySelector(".ad-banner")).toBeNull();
   });
 
   it("exposes option elements via getters", () => {
@@ -134,7 +133,7 @@ describe("MatchupScreenView", () => {
     const view = new MatchupScreenView(container);
     view.render("Movies", "Actors", entryA, entryB);
     view.render("Music", "Bands", makeEntry("Beatles"), makeEntry("Queen"));
-    expect(container.querySelector(".matchup-header")!.textContent).toBe("Music > Bands");
+    expect(container.querySelector(".matchup-header")!.textContent).toBe("Music › Bands");
     const labels = container.querySelectorAll(".labels-row .option-label");
     expect(labels[0]!.textContent).toBe("Beatles");
     expect(labels[1]!.textContent).toBe("Queen");

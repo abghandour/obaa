@@ -51,9 +51,9 @@ describe("MainPageView", () => {
 
     const buttons = container.querySelectorAll(".arena-button");
     expect(buttons.length).toBe(3);
-    expect(buttons[0].textContent).toBe("Bands");
-    expect(buttons[1].textContent).toBe("Actors");
-    expect(buttons[2].textContent).toBe("Albums");
+    expect(buttons[0].textContent).toContain("Bands");
+    expect(buttons[1].textContent).toContain("Actors");
+    expect(buttons[2].textContent).toContain("Albums");
   });
 
   it("sets data-arena-id on each button", () => {
@@ -92,15 +92,12 @@ describe("MainPageView", () => {
     expect(() => button.click()).not.toThrow();
   });
 
-  it("renders the ad banner at the bottom", () => {
+  it("does not render the ad banner (hidden)", () => {
     const view = new MainPageView(container);
     view.render([]);
 
     const banner = container.querySelector(".ad-banner");
-    expect(banner).not.toBeNull();
-    expect(banner!.textContent).toBe("Advertisement");
-    // Banner should be the last child
-    expect(container.lastElementChild).toBe(banner);
+    expect(banner).toBeNull();
   });
 
   it("does not render battleground category headers", () => {
@@ -126,6 +123,6 @@ describe("MainPageView", () => {
 
     const buttons = container.querySelectorAll(".arena-button");
     expect(buttons.length).toBe(2);
-    expect(buttons[0].textContent).toBe("B");
+    expect(buttons[0].textContent).toContain("B");
   });
 });

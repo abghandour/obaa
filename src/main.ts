@@ -28,6 +28,34 @@ async function main() {
   let replayMatches: RecordedMatch[] | null = null;
   let replayIndex = 0;
   let replayUserPicks: RecordedMatch[] = [];
+  let replayIgnored: Set<string> = new Set();
+
+  /** Find the next replay index that doesn't involve an ignored entry. Returns -1 if none. */
+  function nextValidReplayIndex(fromIndex: number): number {
+    if (!replayMatches) return -1;
+    for (let i = fromIndex; i < replayMatches.length; i++) {
+      const m = replayMatches[i]!;
+      if (!replayIgnored.has(m.entryA) && !replayIgnored.has(m.entryB)) return i;
+    }
+    return -1;
+  }
+
+  /** Filter replay matches to only those not involving ignored entries. */
+  function nonIgnoredReplayMatches(): RecordedMatch[] {
+    if (!replayMatches) return [];
+    return replayMatches.filter(m => !replayIgnored.has(m.entryA) && !replayIgnored.has(m.entryB));
+  }
+
+  /** Count remaining valid (non-ignored) replay matches from current index onward. */
+  function countRemainingValidMatches(): number {
+    if (!replayMatches) return 0;
+    let count = 0;
+    for (let i = replayIndex; i < replayMatches.length; i++) {
+      const m = replayMatches[i]!;
+      if (!replayIgnored.has(m.entryA) && !replayIgnored.has(m.entryB)) count++;
+    }
+    return count;
+  }
 
   // --- Load persisted data ---
   await history.load();
@@ -110,21 +138,26 @@ async function main() {
     // --- Replay mode: advance to next replay match or show verdict ---
     if (replayMatches) {
       replayIndex++;
-      if (replayIndex >= replayMatches.length) {
-        // All replay matches done — show verdict
-        const score = RecordingSession.jaccardSimilarity(replayMatches, replayUserPicks);
+      const nextIdx = nextValidReplayIndex(replayIndex);
+      if (nextIdx === -1) {
+        // All replay matches done — show verdict (excluding ignored entries)
+        const validOriginals = nonIgnoredReplayMatches();
+        const score = RecordingSession.jaccardSimilarity(validOriginals, replayUserPicks);
         const verdictText = RecordingSession.verdict(score);
         const arena = entryDb.getArena(gameState.selectedArenaId);
         const arenaName = arena?.name ?? "Arena";
-        matchupScreenView.showReplayResult(score, verdictText, replayMatches, replayUserPicks, arenaName, () => {
+        matchupScreenView.showReplayResult(score, verdictText, validOriginals, replayUserPicks, arenaName, () => {
           matchupScreenView.showRecordButton();
         });
         replayMatches = null;
         replayIndex = 0;
         replayUserPicks = [];
+        replayIgnored = new Set();
         gameState.isTransitioning = false;
         return;
       }
+
+      replayIndex = nextIdx;
 
       // Show next replay match
       const arena = entryDb.getArena(gameState.selectedArenaId);
@@ -135,11 +168,15 @@ async function main() {
       const nextB = arena.entries.find(e => e.name === nextReplay.entryB);
       if (!nextA || !nextB) { gameState.isTransitioning = false; return; }
 
+      // Count how many valid matches the user has completed so far (including this upcoming one)
+      const validTotal = nonIgnoredReplayMatches().length;
+      const validDone = replayUserPicks.length;
+
       gameState.currentMatchup = { optionA: nextA, optionB: nextB };
       await matchupScreenView.preloadEntries(nextA, nextB);
       matchupScreenView.render(arena.battleground, arena.name, nextA, nextB);
       wireGameplayLoop();
-      matchupScreenView.setReplayProgress(replayIndex + 1, replayMatches.length);
+      matchupScreenView.setReplayProgress(validDone + 1, validTotal);
       gameState.isTransitioning = false;
       return;
     }
@@ -270,9 +307,53 @@ async function main() {
 
       const { optionA, optionB } = gameState.currentMatchup;
       const ignored = side === "a" ? optionA : optionB;
-      const opponent = side === "a" ? optionB : optionA;
 
       gameState.ignoredEntries.add(ignored.name);
+
+      // --- Replay mode: skip all matches involving the ignored entry ---
+      if (replayMatches) {
+        replayIgnored.add(ignored.name);
+
+        const nextIdx = nextValidReplayIndex(replayIndex + 1);
+        if (nextIdx === -1) {
+          // No more valid matches — show verdict excluding ignored
+          const validOriginals = nonIgnoredReplayMatches();
+          const score = RecordingSession.jaccardSimilarity(validOriginals, replayUserPicks);
+          const verdictText = RecordingSession.verdict(score);
+          const arena = entryDb.getArena(gameState.selectedArenaId);
+          const arenaName = arena?.name ?? "Arena";
+          matchupScreenView.showReplayResult(score, verdictText, validOriginals, replayUserPicks, arenaName, () => {
+            matchupScreenView.showRecordButton();
+          });
+          replayMatches = null;
+          replayIndex = 0;
+          replayUserPicks = [];
+          replayIgnored = new Set();
+          return;
+        }
+
+        replayIndex = nextIdx;
+        const arena = entryDb.getArena(gameState.selectedArenaId);
+        if (!arena) return;
+
+        const nextReplay = replayMatches[replayIndex]!;
+        const nextA = arena.entries.find(e => e.name === nextReplay.entryA);
+        const nextB = arena.entries.find(e => e.name === nextReplay.entryB);
+        if (!nextA || !nextB) return;
+
+        const validTotal = nonIgnoredReplayMatches().length;
+        const validDone = replayUserPicks.length;
+
+        gameState.currentMatchup = { optionA: nextA, optionB: nextB };
+        await matchupScreenView.preloadEntries(nextA, nextB);
+        matchupScreenView.render(arena.battleground, arena.name, nextA, nextB);
+        wireGameplayLoop();
+        matchupScreenView.setReplayProgress(validDone + 1, validTotal);
+        return;
+      }
+
+      // --- Normal mode ---
+      const opponent = side === "a" ? optionB : optionA;
 
       const replacement = matchupEngine.findReplacement(gameState.selectedArenaId, opponent, gameState.ignoredEntries);
       if (!replacement) {
@@ -358,6 +439,7 @@ async function main() {
     replayMatches = matches;
     replayIndex = 0;
     replayUserPicks = [];
+    replayIgnored = new Set();
 
     gameState.currentScreen = "matchup";
     gameState.selectedArenaId = arenaId;
@@ -383,6 +465,7 @@ async function main() {
     replayMatches = null;
     replayIndex = 0;
     replayUserPicks = [];
+    replayIgnored = new Set();
 
     if (route.screen === "main") {
       gameState.reset();

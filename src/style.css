@@ -267,7 +267,7 @@ button .btn-icon svg {
 
 .matchup-area {
   position: relative;
-  flex: 1 1 0;
+  flex: 0.75 1 0;
   min-height: 0;
   overflow: hidden;
   border-radius: var(--radius-lg);

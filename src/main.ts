@@ -33,6 +33,14 @@ async function main() {
   await history.load();
   await audio.loadSounds();
 
+  // Validate images in the background — don't block initial render.
+  // When done, re-render the main page to drop any broken entries.
+  entryDb.validateImages().then(() => {
+    if (gameState.currentScreen === "main") {
+      mainPageView.render(entryDb.getAllArenas());
+    }
+  });
+
   // --- Helper: stop recording and show share modal ---
   async function stopRecordingAndShare(): Promise<void> {
     recording.stop();

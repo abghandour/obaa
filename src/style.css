@@ -42,10 +42,22 @@ body {
   padding-bottom: calc(var(--ad-banner-height) + var(--spacing-md));
 }
 
+html, body {
+  height: 100%;
+}
+
 #app {
   max-width: 480px;
   margin: 0 auto;
   padding: var(--spacing-md);
+}
+
+#app:has(.matchup-area) {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--ad-banner-height) - var(--spacing-md));
+  /* cancel body padding-bottom since we account for ad banner above */
+  box-sizing: border-box;
 }
 
 /* ── Headers ──────────────────────────────────────────────── */
@@ -143,7 +155,8 @@ h2 {
 
 .matchup-area {
   position: relative;
-  height: calc(100vh - 200px - var(--ad-banner-height) - var(--spacing-md));
+  flex: 1 1 0;
+  min-height: 0;
   overflow: hidden;
 }
 

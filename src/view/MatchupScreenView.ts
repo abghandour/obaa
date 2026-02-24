@@ -1,5 +1,6 @@
 import type { Entry } from "../types/index";
 import type { RecordedMatch } from "../logic/RecordingSession";
+import html2canvas from "html2canvas";
 import { SwipeHandler } from "../logic/SwipeHandler";
 import type { CurtainState } from "../logic/SwipeHandler";
 import {
@@ -469,8 +470,45 @@ export class MatchupScreenView {
     msgBtn.className = "share-button";
     msgBtn.innerHTML = iconMessage;
     msgBtn.title = "Message";
-    msgBtn.addEventListener("click", () => {
-      window.open(`sms:?&body=${encodeURIComponent(resultText)}`, "_self");
+    msgBtn.addEventListener("click", async () => {
+      try {
+        // Hide share buttons temporarily for a clean screenshot
+        shareGroup.style.visibility = "hidden";
+        closeBtn.style.visibility = "hidden";
+
+        const canvas = await html2canvas(modal, {
+          backgroundColor: "#161628",
+          scale: 2,
+          useCORS: true,
+        });
+
+        shareGroup.style.visibility = "";
+        closeBtn.style.visibility = "";
+
+        const blob = await new Promise<Blob | null>((res) =>
+          canvas.toBlob(res, "image/png")
+        );
+        if (!blob) {
+          window.open(`sms:?&body=${encodeURIComponent(resultText)}`, "_self");
+          return;
+        }
+
+        if (navigator.share) {
+          const file = new File([blob], "verdict.png", { type: "image/png" });
+          await navigator.share({ files: [file] });
+        } else {
+          // Fallback: download + open SMS
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "verdict.png";
+          a.click();
+          URL.revokeObjectURL(url);
+          window.open(`sms:?&body=${encodeURIComponent(resultText)}`, "_self");
+        }
+      } catch {
+        window.open(`sms:?&body=${encodeURIComponent(resultText)}`, "_self");
+      }
     });
     addRipple(msgBtn);
 

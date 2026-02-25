@@ -64,6 +64,7 @@ export class EntryDatabase {
   private static VISIBLE_ARENAS = new Set([
     "top-100-alternative-albums",
     "imdb-top-100-movies",
+    "bjj-goat"
   ]);
 
   getAllArenas(): Arena[] {

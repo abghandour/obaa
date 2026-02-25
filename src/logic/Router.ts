@@ -17,13 +17,18 @@ export class Router {
   }
 
   /** Set window.location.hash based on the given route. */
-  navigate(route: Route): void {
-    if (route.screen === "matchup" && route.arenaId) {
-      window.location.hash = `#/arena/${route.arenaId}`;
-    } else {
-      window.location.hash = "#/";
+  /** Set window.location.hash based on the given route. */
+    navigate(route: Route): void {
+      if (route.screen === "matchup" && route.arenaId) {
+        if (route.mode === "tournament") {
+          window.location.hash = `#/tournament/${route.arenaId}`;
+        } else {
+          window.location.hash = `#/arena/${route.arenaId}`;
+        }
+      } else {
+        window.location.hash = "#/";
+      }
     }
-  }
 
   /** Parse the current hash and return a Route object. */
   getCurrentRoute(): Route {
@@ -42,19 +47,32 @@ export class Router {
   }
 
   /** Parse a hash string into a Route. Exported as static for testability. */
-  static parseHash(hash: string): Route {
-    const normalized = hash.startsWith("#") ? hash.slice(1) : hash;
-    // Check for replay param: /arena/{id}?replay={data}
-    const replayMatch = normalized.match(/^\/arena\/([^?]+)\?replay=(.+)$/);
-    if (replayMatch && replayMatch[1] && replayMatch[2]) {
-      return { screen: "matchup", arenaId: replayMatch[1], replayData: replayMatch[2] };
+  /** Parse a hash string into a Route. Exported as static for testability. */
+    static parseHash(hash: string): Route {
+      const normalized = hash.startsWith("#") ? hash.slice(1) : hash;
+
+      // Tournament routes
+      const tournamentReplayMatch = normalized.match(/^\/tournament\/([^?]+)\?replay=(.+)$/);
+      if (tournamentReplayMatch && tournamentReplayMatch[1] && tournamentReplayMatch[2]) {
+        return { screen: "matchup", arenaId: tournamentReplayMatch[1], replayData: tournamentReplayMatch[2], mode: "tournament" };
+      }
+      const tournamentMatch = normalized.match(/^\/tournament\/(.+)$/);
+      if (tournamentMatch && tournamentMatch[1]) {
+        return { screen: "matchup", arenaId: tournamentMatch[1], mode: "tournament" };
+      }
+
+      // Arena (battle) routes
+      const replayMatch = normalized.match(/^\/arena\/([^?]+)\?replay=(.+)$/);
+      if (replayMatch && replayMatch[1] && replayMatch[2]) {
+        return { screen: "matchup", arenaId: replayMatch[1], replayData: replayMatch[2] };
+      }
+      const arenaMatch = normalized.match(/^\/arena\/(.+)$/);
+      if (arenaMatch && arenaMatch[1]) {
+        return { screen: "matchup", arenaId: arenaMatch[1] };
+      }
+
+      return { screen: "main" };
     }
-    const arenaMatch = normalized.match(/^\/arena\/(.+)$/);
-    if (arenaMatch && arenaMatch[1]) {
-      return { screen: "matchup", arenaId: arenaMatch[1] };
-    }
-    return { screen: "main" };
-  }
 
   private notifyListeners(): void {
     const route = this.getCurrentRoute();

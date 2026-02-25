@@ -144,6 +144,47 @@ button .btn-icon svg {
   display: block;
 }
 
+/* ── Mode Toggle ──────────────────────────────────────────── */
+.mode-toggle {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-lg);
+  padding: 3px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mode-btn {
+  min-height: 36px;
+  padding: var(--spacing-xs) var(--spacing-lg);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.mode-btn:hover {
+  color: var(--color-text);
+}
+
+.mode-btn.active {
+  background: var(--color-primary-solid);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
 /* ── Arena Grid ───────────────────────────────────────────── */
 .arena-grid {
   display: grid;
@@ -373,6 +414,54 @@ button .btn-icon svg {
 .ignore-button:active {
   transform: scale(0.92);
   background: rgba(244, 63, 94, 0.15);
+}
+
+/* ── Tournament Round Label & Replace Buttons ──────────────── */
+
+.round-label {
+  text-align: center;
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0.03em;
+}
+
+.replace-button {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  min-height: 36px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-bounce);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.replace-button:hover {
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--color-primary);
+}
+
+.replace-button:active {
+  transform: scale(0.92);
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.replace-button:disabled {
+  opacity: 0.3;
+  pointer-events: none;
 }
 
 /* ── Results Modal ─────────────────────────────────────────── */
@@ -829,4 +918,231 @@ button .btn-icon svg {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Bracket View ──────────────────────────────────────────── */
+.bracket-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: overlay-fade-in 0.2s ease-out;
+}
+
+.bracket-container {
+  background: rgba(22, 22, 40, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-x: auto;
+  overflow-y: auto;
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  animation: modal-slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Champion ──────────────────────────────────────────────── */
+.bracket-champion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bracket-champion-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fbbf24;
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.3);
+}
+
+.bracket-champion-name {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.bracket-champion-label {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Rounds Row ────────────────────────────────────────────── */
+.bracket-rounds {
+  display: flex;
+  gap: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+}
+
+.bracket-round {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  min-width: 140px;
+}
+
+.bracket-round-name {
+  text-align: center;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--spacing-xs);
+}
+
+/* ── Match Box ─────────────────────────────────────────────── */
+.bracket-match {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bracket-entry {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bracket-entry.winner {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* ── Button Row ────────────────────────────────────────────── */
+.bracket-btn-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.bracket-share-btn,
+.bracket-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  min-width: 100px;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-bounce);
+}
+
+.bracket-share-btn {
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--color-primary-solid);
+}
+
+.bracket-share-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.bracket-share-btn:active {
+  transform: scale(0.94);
+}
+
+.bracket-close-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.bracket-close-btn:hover {
+  background: var(--color-surface-hover);
+}
+
+.bracket-close-btn:active {
+  transform: scale(0.94);
+}
+
+
+/* ── SVG Bracket Mini ──────────────────────────────────────── */
+.bracket-svg-mini {
+  width: 100%;
+  max-height: 80px;
+  overflow: hidden;
+  margin: var(--spacing-xs) 0;
+  opacity: 0.85;
+  cursor: default;
+}
+
+.bracket-svg-mini svg {
+  width: 100%;
+  height: auto;
+  max-height: 80px;
+}
+
+/* ── SVG Bracket Modal ─────────────────────────────────────── */
+.bracket-svg-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: overlay-fade-in 0.2s ease-out;
+}
+
+.bracket-svg-modal {
+  background: rgba(22, 22, 40, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow: auto;
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  animation: modal-slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.bracket-svg-container {
+  width: 100%;
+  overflow-x: auto;
+  padding: var(--spacing-sm) 0;
+}
+
+.bracket-svg-container svg {
+  min-width: 500px;
+  height: auto;
 }

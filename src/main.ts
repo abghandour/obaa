@@ -9,6 +9,11 @@ import { MainPageView } from "./view/MainPageView";
 import { MatchupScreenView } from "./view/MatchupScreenView";
 import { RecordingSession } from "./logic/RecordingSession";
 import type { RecordedMatch } from "./logic/RecordingSession";
+import { TournamentBracket } from "./logic/TournamentBracket";
+import { TournamentEngine } from "./logic/TournamentEngine";
+import { TournamentMatchupView } from "./view/TournamentMatchupView";
+import { BracketView } from "./view/BracketView";
+import { BracketSvgView } from "./view/BracketSvgView";
 
 async function main() {
   // --- Create instances ---
@@ -23,6 +28,11 @@ async function main() {
   const mainPageView = new MainPageView();
   const matchupScreenView = new MatchupScreenView();
   const recording = new RecordingSession();
+
+  // Tournament instances
+  const tournamentMatchupView = new TournamentMatchupView();
+  const bracketView = new BracketView(document.getElementById("app") ?? document.body);
+  let tournamentEngine: TournamentEngine | null = null;
 
   // Replay state
   let replayMatches: RecordedMatch[] | null = null;
@@ -416,6 +426,348 @@ async function main() {
     matchupScreenView.updateBattleCount(0);
   }
 
+  // --- Tournament: start a new tournament (Task 9.2) ---
+  async function startTournament(arenaId: string): Promise<void> {
+    const arena = entryDb.getArena(arenaId);
+    if (!arena) { router.navigate({ screen: "main" }); return; }
+
+    const bracketSize = TournamentBracket.calcBracketSize(arena.entries.length);
+    if (bracketSize === 0) {
+      router.navigate({ screen: "main" });
+      return;
+    }
+
+    const seeded = TournamentBracket.generateSeeding(arena.entries, bracketSize);
+    const bracket = new TournamentBracket(seeded);
+
+    gameState.currentScreen = "matchup";
+    gameState.mode = "tournament";
+    gameState.selectedArenaId = arenaId;
+    gameState.tournament = {
+      active: true,
+      arenaId,
+      bracket,
+      currentRoundIndex: 0,
+      currentMatchIndex: 0,
+    };
+
+    tournamentEngine = new TournamentEngine(entryDb, bracket);
+
+    // Start recording (Task 9.6)
+    recording.start();
+
+    // Show first match
+    const nextMatch = bracket.getNextMatch();
+    if (!nextMatch) return;
+
+    const match = bracket.rounds[nextMatch.roundIndex].matches[nextMatch.matchIndex];
+    if (!match.entryA || !match.entryB) return;
+
+    gameState.currentMatchup = { optionA: match.entryA, optionB: match.entryB };
+    await tournamentMatchupView.getMatchupView().preloadEntries(match.entryA, match.entryB);
+    tournamentMatchupView.render(arena.battleground, arena.name, match.entryA, match.entryB);
+
+    const roundName = TournamentBracket.roundName(bracket.size, nextMatch.roundIndex);
+    const totalMatches = bracket.rounds[nextMatch.roundIndex].matches.length;
+    tournamentMatchupView.setRoundLabel(roundName, nextMatch.matchIndex + 1, totalMatches);
+    tournamentMatchupView.updateMiniBracket(bracket.rounds, nextMatch.roundIndex, nextMatch.matchIndex);
+    tournamentMatchupView.setReplacementEnabled(tournamentEngine.isFirstRound());
+
+    wireTournamentGameplay();
+  }
+
+  // --- Tournament: wire gameplay callbacks (Task 9.3) ---
+  function wireTournamentGameplay(): void {
+    const matchupView = tournamentMatchupView.getMatchupView();
+
+    matchupView.onOptionTap(async (option) => {
+      await handleTournamentSelection(option);
+    });
+
+    matchupView.onHeaderClick(() => {
+      router.navigate({ screen: "main" });
+    });
+
+    // Wire swipe
+    const swipeHandler = matchupView.getSwipeHandler();
+    swipeHandler.onSwipeUpdate((state) => {
+      if (gameState.isTransitioning) return;
+      matchupView.applyCurtainClip(state);
+    });
+    swipeHandler.onSwipeComplete((selected) => {
+      if (gameState.isTransitioning) return;
+      handleTournamentSelection(selected);
+    });
+    swipeHandler.onSwipeCancel(() => {
+      matchupView.resetCurtain();
+    });
+
+    // Wire replace buttons (Task 9.4)
+    tournamentMatchupView.onReplace(async (side) => {
+      await handleTournamentReplace(side);
+    });
+  }
+
+  // --- Tournament: handle match selection (Task 9.3) ---
+  async function handleTournamentSelection(option: "a" | "b"): Promise<void> {
+    if (gameState.isTransitioning || !gameState.currentMatchup || !gameState.selectedArenaId || !gameState.tournament) return;
+    gameState.isTransitioning = true;
+
+    const bracket = gameState.tournament.bracket as TournamentBracket;
+    const { optionA, optionB } = gameState.currentMatchup;
+    const winner = option === "a" ? optionA : optionB;
+
+    const matchupView = tournamentMatchupView.getMatchupView();
+    const winnerElement = option === "a" ? matchupView.getOptionAElement() : matchupView.getOptionBElement();
+
+    // Record in recording session (Task 9.6)
+    if (recording.active) {
+      recording.addMatch(optionA.name, optionB.name, winner.name);
+    }
+
+    // Selection highlight
+    if (winnerElement) {
+      await animationController.playSelectionHighlight(winnerElement);
+    }
+
+    // Record result in bracket
+    const currentRound = gameState.tournament.currentRoundIndex;
+    const currentMatch = gameState.tournament.currentMatchIndex;
+    const next = bracket.recordResult(currentRound, currentMatch, winner);
+
+    if (next === null) {
+      // Tournament complete
+      gameState.isTransitioning = false;
+      await completeTournament();
+      return;
+    }
+
+    // Update tournament state
+    gameState.tournament.currentRoundIndex = next.roundIndex;
+    gameState.tournament.currentMatchIndex = next.matchIndex;
+
+    // Show next match
+    const nextMatchData = bracket.rounds[next.roundIndex].matches[next.matchIndex];
+    if (!nextMatchData.entryA || !nextMatchData.entryB) {
+      gameState.isTransitioning = false;
+      return;
+    }
+
+    const arena = entryDb.getArena(gameState.selectedArenaId);
+    if (!arena) { gameState.isTransitioning = false; return; }
+
+    gameState.currentMatchup = { optionA: nextMatchData.entryA, optionB: nextMatchData.entryB };
+    await matchupView.preloadEntries(nextMatchData.entryA, nextMatchData.entryB);
+    tournamentMatchupView.render(arena.battleground, arena.name, nextMatchData.entryA, nextMatchData.entryB);
+
+    const roundName = TournamentBracket.roundName(bracket.size, next.roundIndex);
+    const totalMatches = bracket.rounds[next.roundIndex].matches.length;
+    tournamentMatchupView.setRoundLabel(roundName, next.matchIndex + 1, totalMatches);
+    tournamentMatchupView.updateMiniBracket(bracket.rounds, next.roundIndex, next.matchIndex);
+    tournamentMatchupView.setReplacementEnabled(tournamentEngine?.isFirstRound() ?? false);
+
+    wireTournamentGameplay();
+    gameState.isTransitioning = false;
+  }
+
+  // --- Tournament: handle first-round replacement (Task 9.4) ---
+  async function handleTournamentReplace(side: "a" | "b"): Promise<void> {
+    if (!gameState.selectedArenaId || !gameState.tournament || !tournamentEngine) return;
+
+    const bracket = gameState.tournament.bracket as TournamentBracket;
+    const replacement = tournamentEngine.findReplacement(gameState.selectedArenaId);
+    if (!replacement) return;
+
+    const matchIndex = gameState.tournament.currentMatchIndex;
+    bracket.replaceEntry(matchIndex, side, replacement);
+
+    // Re-render current match
+    const match = bracket.rounds[0].matches[matchIndex];
+    if (!match.entryA || !match.entryB) return;
+
+    const arena = entryDb.getArena(gameState.selectedArenaId);
+    if (!arena) return;
+
+    gameState.currentMatchup = { optionA: match.entryA, optionB: match.entryB };
+    await tournamentMatchupView.getMatchupView().preloadEntries(match.entryA, match.entryB);
+    tournamentMatchupView.render(arena.battleground, arena.name, match.entryA, match.entryB);
+
+    const roundName = TournamentBracket.roundName(bracket.size, 0);
+    const totalMatches = bracket.rounds[0].matches.length;
+    tournamentMatchupView.setRoundLabel(roundName, matchIndex + 1, totalMatches);
+    tournamentMatchupView.updateMiniBracket(bracket.rounds, 0, matchIndex);
+    tournamentMatchupView.setReplacementEnabled(true);
+
+    wireTournamentGameplay();
+  }
+
+  // --- Tournament: completion handler (Task 9.5) ---
+  async function completeTournament(): Promise<void> {
+    if (!gameState.tournament || !gameState.selectedArenaId) return;
+
+    const bracket = gameState.tournament.bracket as TournamentBracket;
+    const champion = bracket.getChampion();
+
+    // Stop recording (Task 9.6)
+    recording.stop();
+    const serialized = bracket.serialize();
+    serialized.arenaId = gameState.selectedArenaId;
+
+    bracketView.show(bracket.rounds, champion);
+
+    const tournamentPayload = JSON.stringify({
+      a: gameState.selectedArenaId,
+      t: { s: serialized.size, seed: serialized.seeding, r: serialized.results }
+    });
+    const encodedData = await encodeTournamentRecord(tournamentPayload);
+    const shareUrl = `${window.location.origin}${window.location.pathname}#/tournament/${gameState.selectedArenaId}?replay=${encodedData}`;
+    const arena = entryDb.getArena(gameState.selectedArenaId);
+    const arenaName = arena?.name ?? "Arena";
+
+    BracketSvgView.showModal(bracket.rounds, champion, {
+      shareUrl,
+      arenaName,
+      onCopyLink: async () => {
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          alert("Tournament link copied to clipboard!");
+        } catch {
+          prompt("Copy this link:", shareUrl);
+        }
+      },
+      onDismiss: () => {
+        BracketSvgView.hideModal();
+        bracketView.hide();
+        router.navigate({ screen: "main" });
+      },
+    });
+
+    bracketView.onShare(async () => {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        alert("Tournament link copied to clipboard!");
+      } catch {
+        prompt("Copy this link:", shareUrl);
+      }
+    });
+
+    bracketView.onDismiss(() => {
+      bracketView.hide();
+      router.navigate({ screen: "main" });
+    });
+  }
+
+  // --- Tournament: encode/decode helpers (Task 9.6) ---
+  async function encodeTournamentRecord(payload: string): Promise<string> {
+    if (typeof CompressionStream !== "undefined") {
+      try {
+        const bytes = new TextEncoder().encode(payload);
+        const cs = new CompressionStream("deflate-raw");
+        const writer = cs.writable.getWriter();
+        writer.write(bytes);
+        writer.close();
+        const reader = cs.readable.getReader();
+        const chunks: Uint8Array[] = [];
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+        const total = chunks.reduce((s, c) => s + c.length, 0);
+        const compressed = new Uint8Array(total);
+        let off = 0;
+        for (const c of chunks) { compressed.set(c, off); off += c.length; }
+        let binary = "";
+        for (let i = 0; i < compressed.length; i++) binary += String.fromCharCode(compressed[i]!);
+        return "1" + btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      } catch { /* fall through */ }
+    }
+    return "0" + btoa(payload).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  async function decodeTournamentRecord(encoded: string): Promise<{ arenaId: string; size: number; seeding: string[]; results: (string | null)[] }> {
+    const flag = encoded[0];
+    const data = encoded.slice(1);
+    let json: string;
+    if (flag === "1" && typeof DecompressionStream !== "undefined") {
+      const padded = data.replace(/-/g, "+").replace(/_/g, "/");
+      const binary = atob(padded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const ds = new DecompressionStream("deflate-raw");
+      const writer = ds.writable.getWriter();
+      writer.write(bytes);
+      writer.close();
+      const reader = ds.readable.getReader();
+      const chunks: Uint8Array[] = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const total = chunks.reduce((s, c) => s + c.length, 0);
+      const decompressed = new Uint8Array(total);
+      let off = 0;
+      for (const c of chunks) { decompressed.set(c, off); off += c.length; }
+      json = new TextDecoder().decode(decompressed);
+    } else {
+      const padded = data.replace(/-/g, "+").replace(/_/g, "/");
+      json = atob(padded);
+    }
+    const parsed = JSON.parse(json) as { a: string; t: { s: number; seed: string[]; r: (string | null)[] } };
+    return { arenaId: parsed.a, size: parsed.t.s, seeding: parsed.t.seed, results: parsed.t.r };
+  }
+
+  // --- Tournament: replay from shared URL (Task 9.7) ---
+  async function startTournamentReplay(decoded: { arenaId: string; size: number; seeding: string[]; results: (string | null)[] }): Promise<void> {
+    const arena = entryDb.getArena(decoded.arenaId);
+    if (!arena) { router.navigate({ screen: "main" }); return; }
+
+    // Reconstruct seeded entries from arena
+    const lookup = new Map(arena.entries.map(e => [e.name, e]));
+    const seededEntries = decoded.seeding.map(name => lookup.get(name)).filter((e): e is NonNullable<typeof e> => e != null);
+    if (seededEntries.length !== decoded.size) {
+      console.error("Tournament replay: missing entries in arena");
+      router.navigate({ screen: "main" });
+      return;
+    }
+
+    const bracket = new TournamentBracket(seededEntries);
+
+    gameState.currentScreen = "matchup";
+    gameState.mode = "tournament";
+    gameState.selectedArenaId = decoded.arenaId;
+    gameState.tournament = {
+      active: true,
+      arenaId: decoded.arenaId,
+      bracket,
+      currentRoundIndex: 0,
+      currentMatchIndex: 0,
+    };
+
+    tournamentEngine = new TournamentEngine(entryDb, bracket);
+    recording.start();
+
+    // Show first match
+    const nextMatch = bracket.getNextMatch();
+    if (!nextMatch) return;
+
+    const match = bracket.rounds[nextMatch.roundIndex].matches[nextMatch.matchIndex];
+    if (!match.entryA || !match.entryB) return;
+
+    gameState.currentMatchup = { optionA: match.entryA, optionB: match.entryB };
+    await tournamentMatchupView.getMatchupView().preloadEntries(match.entryA, match.entryB);
+    tournamentMatchupView.render(arena.battleground, arena.name, match.entryA, match.entryB);
+
+    const roundName = TournamentBracket.roundName(bracket.size, nextMatch.roundIndex);
+    const totalMatches = bracket.rounds[nextMatch.roundIndex].matches.length;
+    tournamentMatchupView.setRoundLabel(roundName, nextMatch.matchIndex + 1, totalMatches);
+    tournamentMatchupView.updateMiniBracket(bracket.rounds, nextMatch.roundIndex, nextMatch.matchIndex);
+    tournamentMatchupView.setReplacementEnabled(false);
+
+    wireTournamentGameplay();
+  }
+
   // --- Route change handler ---
   router.onRouteChange(async (route) => {
     // Reset replay state on any navigation
@@ -426,48 +778,88 @@ async function main() {
 
     if (route.screen === "main") {
       gameState.reset();
+      bracketView.hide();
       mainPageView.render(entryDb.getAllArenas());
     } else if (route.screen === "matchup" && route.arenaId) {
-      // Check for replay data
-      if (route.replayData) {
-        try {
-          const decoded = await RecordingSession.decode(route.replayData);
-          await startReplay(decoded.arenaId, decoded.matches);
-          return;
-        } catch (e) {
-          console.error("Failed to decode replay data:", e);
+      if (route.mode === "tournament") {
+        // Tournament mode (Task 9.7)
+        if (route.replayData) {
+          try {
+            const decoded = await decodeTournamentRecord(route.replayData);
+            await startTournamentReplay(decoded);
+          } catch (e) {
+            console.error("Failed to decode tournament replay:", e);
+            router.navigate({ screen: "main" });
+          }
+        } else {
+          await startTournament(route.arenaId);
         }
-      }
+      } else {
+        // Existing battle mode handling
+        if (route.replayData) {
+          try {
+            const decoded = await RecordingSession.decode(route.replayData);
+            await startReplay(decoded.arenaId, decoded.matches);
+            return;
+          } catch (e) {
+            console.error("Failed to decode replay data:", e);
+          }
+        }
 
-      const arena = entryDb.getArena(route.arenaId);
-      if (!arena) {
-        router.navigate({ screen: "main" });
-        return;
-      }
+        const arena = entryDb.getArena(route.arenaId);
+        if (!arena) {
+          router.navigate({ screen: "main" });
+          return;
+        }
 
-      await startRecordingSession(route.arenaId);
+        await startRecordingSession(route.arenaId);
+      }
     }
+  });
+
+  // --- Wire mode toggle → update gameState.mode (Task 9.1) ---
+  mainPageView.onModeChange((mode) => {
+    gameState.mode = mode;
   });
 
   // --- Wire arena selection → navigate to matchup screen ---
   mainPageView.onArenaSelect((arenaId) => {
-    router.navigate({ screen: "matchup", arenaId });
+    if (mainPageView.getMode() === "tournament") {
+      router.navigate({ screen: "matchup", arenaId, mode: "tournament" });
+    } else {
+      router.navigate({ screen: "matchup", arenaId });
+    }
   });
 
   // --- Render initial route ---
   const initialRoute = router.getCurrentRoute();
   if (initialRoute.screen === "matchup" && initialRoute.arenaId) {
-    // Check for replay data on initial load
-    if (initialRoute.replayData) {
-      try {
-        const decoded = await RecordingSession.decode(initialRoute.replayData);
-        await startReplay(decoded.arenaId, decoded.matches);
-      } catch (e) {
-        console.error("Failed to decode replay data:", e);
-        router.navigate({ screen: "main" });
+    if (initialRoute.mode === "tournament") {
+      // Tournament initial route (Task 9.7)
+      if (initialRoute.replayData) {
+        try {
+          const decoded = await decodeTournamentRecord(initialRoute.replayData);
+          await startTournamentReplay(decoded);
+        } catch (e) {
+          console.error("Failed to decode tournament replay:", e);
+          router.navigate({ screen: "main" });
+        }
+      } else {
+        await startTournament(initialRoute.arenaId);
       }
     } else {
-      await startRecordingSession(initialRoute.arenaId);
+      // Existing battle mode initial route
+      if (initialRoute.replayData) {
+        try {
+          const decoded = await RecordingSession.decode(initialRoute.replayData);
+          await startReplay(decoded.arenaId, decoded.matches);
+        } catch (e) {
+          console.error("Failed to decode replay data:", e);
+          router.navigate({ screen: "main" });
+        }
+      } else {
+        await startRecordingSession(initialRoute.arenaId);
+      }
     }
   } else {
     mainPageView.render(entryDb.getAllArenas());

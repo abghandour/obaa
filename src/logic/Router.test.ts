@@ -44,6 +44,31 @@ describe("Router", () => {
     it("returns main screen for unrecognized hash", () => {
       expect(Router.parseHash("#/unknown/path")).toEqual({ screen: "main" });
     });
+
+    it("returns tournament matchup for '#/tournament/albums'", () => {
+      expect(Router.parseHash("#/tournament/albums")).toEqual({
+        screen: "matchup",
+        arenaId: "albums",
+        mode: "tournament",
+      });
+    });
+
+    it("returns tournament matchup with replay data", () => {
+      expect(Router.parseHash("#/tournament/albums?replay=abc123")).toEqual({
+        screen: "matchup",
+        arenaId: "albums",
+        replayData: "abc123",
+        mode: "tournament",
+      });
+    });
+
+    it("returns tournament matchup for arena with hyphens", () => {
+      expect(Router.parseHash("#/tournament/sci-fi-films")).toEqual({
+        screen: "matchup",
+        arenaId: "sci-fi-films",
+        mode: "tournament",
+      });
+    });
   });
 
   describe("navigate()", () => {
@@ -60,6 +85,11 @@ describe("Router", () => {
     it("falls back to #/ for matchup screen without arenaId", () => {
       router.navigate({ screen: "matchup" });
       expect(window.location.hash).toBe("#/");
+    });
+
+    it("sets hash to #/tournament/{id} for tournament mode", () => {
+      router.navigate({ screen: "matchup", arenaId: "bands", mode: "tournament" });
+      expect(window.location.hash).toBe("#/tournament/bands");
     });
   });
 

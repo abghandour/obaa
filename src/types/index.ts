@@ -55,6 +55,7 @@ export interface SwipeState {
 /** In-memory application state (not persisted). */
 export interface GameState {
   currentScreen: "main" | "matchup";
+  mode: "battle" | "tournament";
   selectedArenaId: string | null;
   currentMatchup: {
     optionA: Entry;
@@ -70,7 +71,41 @@ export interface Route {
   arenaId?: string;
   /** If present, this is a replay session with encoded match data. */
   replayData?: string;
+  /** Game mode for this route. */
+  mode?: "battle" | "tournament";
 }
 
 /** Audio cue identifiers for game events. */
 export type SoundEffect = "tap" | "swipe" | "transition" | "contenderAppear";
+
+/** A single head-to-head contest between two entries within a tournament round. */
+export interface TournamentMatch {
+  matchIndex: number;
+  entryA: Entry | null;
+  entryB: Entry | null;
+  winner: Entry | null;
+}
+
+/** A stage of the tournament where all matchups at that level are played. */
+export interface TournamentRound {
+  name: string;
+  matches: TournamentMatch[];
+}
+
+/** Compact serialized representation of a tournament bracket for sharing/recording. */
+export interface SerializedBracket {
+  arenaId: string;
+  size: number;
+  seeding: string[];
+  results: (string | null)[];
+}
+
+/** In-memory tournament-specific state. */
+export interface TournamentState {
+  active: boolean;
+  arenaId: string | null;
+  bracket: any | null;
+  currentRoundIndex: number;
+  currentMatchIndex: number;
+}
+

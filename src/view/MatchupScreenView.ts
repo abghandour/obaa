@@ -4,7 +4,7 @@ import html2canvas from "html2canvas";
 import { SwipeHandler } from "../logic/SwipeHandler";
 import type { CurtainState } from "../logic/SwipeHandler";
 import {
-  iconTrophy, iconClipboard, iconMessage, iconShare,
+  iconTrophy, iconClipboard, iconMessage,
   iconBan, iconRecord, iconStop,
   iconClose, iconTrash, addRipple, addFastTap, verdictIcon,
 } from "./icons";
@@ -365,16 +365,7 @@ export class MatchupScreenView {
     });
     addRipple(msgBtn);
 
-    const xBtn = document.createElement("button");
-    xBtn.className = "share-button";
-    xBtn.innerHTML = iconShare;
-    xBtn.title = "Post on X";
-    xBtn.addEventListener("click", () => {
-      window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(messageText)}`, "_blank");
-    });
-    addRipple(xBtn);
-
-    shareGroup.append(copyBtn, msgBtn, xBtn);
+    shareGroup.append(copyBtn, msgBtn);
     titleRow.appendChild(title);
     titleRow.appendChild(shareGroup);
     modal.appendChild(titleRow);
@@ -522,16 +513,7 @@ export class MatchupScreenView {
     });
     addRipple(msgBtn);
 
-    const xBtn = document.createElement("button");
-    xBtn.className = "share-button";
-    xBtn.innerHTML = iconShare;
-    xBtn.title = "Post on X";
-    xBtn.addEventListener("click", () => {
-      window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(resultText)}`, "_blank");
-    });
-    addRipple(xBtn);
-
-    shareGroup.append(copyBtn, msgBtn, xBtn);
+    shareGroup.append(copyBtn, msgBtn);
     modal.appendChild(shareGroup);
 
     const closeBtn = document.createElement("button");

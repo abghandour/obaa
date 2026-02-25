@@ -98,15 +98,10 @@ async function main() {
 
     const { optionA, optionB } = gameState.currentMatchup;
     const winner = option === "a" ? optionA : optionB;
-    const winnerSide: "left" | "right" = option === "a" ? "left" : "right";
-    const loserSide: "left" | "right" = option === "a" ? "right" : "left";
 
     const winnerElement = option === "a"
       ? matchupScreenView.getOptionAElement()
       : matchupScreenView.getOptionBElement();
-    const loserElement = option === "a"
-      ? matchupScreenView.getOptionBElement()
-      : matchupScreenView.getOptionAElement();
 
     // Record result and save history
     matchupEngine.recordResult(gameState.selectedArenaId, optionA, optionB, winner);
@@ -124,54 +119,16 @@ async function main() {
       replayUserPicks.push({ entryA: optionA.name, entryB: optionB.name, winner: winner.name });
     }
 
-    // Animation sequence
+    // Selection highlight
     if (winnerElement) {
       await animationController.playSelectionHighlight(winnerElement);
     }
 
-    // --- Recording mode: skip exit animations, slide new entries down ---
-    if (recording.active) {
-      const freshMatchup = matchupEngine.pickInitialMatchup(gameState.selectedArenaId, gameState.ignoredEntries);
-      if (freshMatchup) {
-        const arena = entryDb.getArena(gameState.selectedArenaId);
-        if (arena) {
-          gameState.currentMatchup = freshMatchup;
-          await matchupScreenView.preloadEntries(freshMatchup.optionA, freshMatchup.optionB);
-
-          // Swap entries in-place — old options stay visible underneath
-          const { newA, newB } = matchupScreenView.swapMatchupEntries(freshMatchup.optionA, freshMatchup.optionB);
-
-          // Re-wire tap callbacks on the new elements
-          wireGameplayLoop();
-
-          // Slide new entries down from top over the old ones
-          await animationController.playSlideDownEntrance(newA, newB);
-
-          // Remove the old option elements now hidden behind the new ones
-          matchupScreenView.cleanupOldOptions();
-
-          gameState.isTransitioning = false;
-          return;
-        }
-      }
-      gameState.isTransitioning = false;
-      await stopRecordingAndShare();
-      return;
-    }
-
-    if (loserElement) {
-      await animationController.playLoserExit(loserElement, loserSide);
-    }
-    if (winnerElement) {
-      await animationController.playWinnerSlide(winnerElement, winnerSide);
-    }
-
-    // --- Replay mode: advance to next replay match or show verdict ---
+    // --- Replay mode ---
     if (replayMatches) {
       replayIndex++;
       const nextIdx = nextValidReplayIndex(replayIndex);
       if (nextIdx === -1) {
-        // All replay matches done — show verdict (excluding ignored entries)
         const validOriginals = nonIgnoredReplayMatches();
         const score = RecordingSession.jaccardSimilarity(validOriginals, replayUserPicks);
         const verdictText = RecordingSession.verdict(score);
@@ -189,8 +146,6 @@ async function main() {
       }
 
       replayIndex = nextIdx;
-
-      // Show next replay match
       const arena = entryDb.getArena(gameState.selectedArenaId);
       if (!arena) { gameState.isTransitioning = false; return; }
 
@@ -199,7 +154,6 @@ async function main() {
       const nextB = arena.entries.find(e => e.name === nextReplay.entryB);
       if (!nextA || !nextB) { gameState.isTransitioning = false; return; }
 
-      // Count how many valid matches the user has completed so far (including this upcoming one)
       const validTotal = nonIgnoredReplayMatches().length;
       const validDone = replayUserPicks.length;
 
@@ -212,44 +166,32 @@ async function main() {
       return;
     }
 
-    // --- Normal mode: pick next contender ---
-    const nextContender = matchupEngine.pickNextContender(gameState.selectedArenaId, winner, gameState.ignoredEntries);
-
-    if (!nextContender) {
-      // Not recording — show exhausted message and navigate back
-      const arena = entryDb.getArena(gameState.selectedArenaId);
-      const arenaName = arena?.name ?? "this arena";
-      matchupScreenView.showExhaustedMessage(
-        `No more matchups for ${winner.name} in ${arenaName}!`
-      );
-      gameState.isTransitioning = false;
-      setTimeout(() => {
-        router.navigate({ screen: "main" });
-      }, 2000);
+    // --- Normal + Recording mode: pick 2 fresh random entries and slide them in ---
+    const freshMatchup = matchupEngine.pickInitialMatchup(gameState.selectedArenaId, gameState.ignoredEntries);
+    if (!freshMatchup) {
+      if (recording.active) {
+        gameState.isTransitioning = false;
+        await stopRecordingAndShare();
+      } else {
+        const arena = entryDb.getArena(gameState.selectedArenaId);
+        matchupScreenView.showExhaustedMessage(`All matchups complete in ${arena?.name ?? "this arena"}!`);
+        gameState.isTransitioning = false;
+        setTimeout(() => router.navigate({ screen: "main" }), 2000);
+      }
       return;
     }
 
-    // Re-render matchup: winner becomes Option A, new contender becomes Option B
     const arena = entryDb.getArena(gameState.selectedArenaId);
-    if (!arena) {
-      gameState.isTransitioning = false;
-      return;
-    }
+    if (!arena) { gameState.isTransitioning = false; return; }
 
-    gameState.currentMatchup = { optionA: winner, optionB: nextContender };
-    await matchupScreenView.preloadEntries(winner, nextContender);
-    matchupScreenView.render(arena.battleground, arena.name, winner, nextContender);
+    gameState.currentMatchup = freshMatchup;
+    await matchupScreenView.preloadEntries(freshMatchup.optionA, freshMatchup.optionB);
 
-    // Re-wire gameplay loop after re-render (new DOM elements)
+    const { newA, newB } = matchupScreenView.swapMatchupEntries(freshMatchup.optionA, freshMatchup.optionB);
     wireGameplayLoop();
+    await animationController.playSlideDownEntrance(newA, newB);
+    matchupScreenView.cleanupOldOptions();
 
-    // Play contender entrance on the new Option B element
-    const newContenderElement = matchupScreenView.getOptionBElement();
-    if (newContenderElement) {
-      await animationController.playContenderEntrance(newContenderElement);
-    }
-
-    // Images are already at 25% crop state from render()
     gameState.isTransitioning = false;
   }
 
@@ -288,28 +230,6 @@ async function main() {
         history.clearArena(gameState.selectedArenaId!);
         await history.save();
       });
-    });
-
-    // Pass button — skip this matchup and load two new random entries
-    matchupScreenView.onPass(async () => {
-      if (gameState.isTransitioning || !gameState.selectedArenaId) return;
-
-      const matchup = matchupEngine.pickInitialMatchup(gameState.selectedArenaId, gameState.ignoredEntries);
-      if (!matchup) {
-        const arena = entryDb.getArena(gameState.selectedArenaId);
-        matchupScreenView.showExhaustedMessage(
-          `All matchups complete in ${arena?.name ?? "this arena"}!`
-        );
-        return;
-      }
-
-      gameState.currentMatchup = matchup;
-      const arena = entryDb.getArena(gameState.selectedArenaId);
-      if (!arena) return;
-
-      await matchupScreenView.preloadEntries(matchup.optionA, matchup.optionB);
-      matchupScreenView.render(arena.battleground, arena.name, matchup.optionA, matchup.optionB);
-      wireGameplayLoop();
     });
 
     // Ignore button — ban an entry and replace it

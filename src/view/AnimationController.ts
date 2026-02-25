@@ -91,6 +91,15 @@ export class AnimationController {
     return Promise.all([pA, pB]).then(() => {});
   }
 
+  /**
+   * Slide a single new contender down from the top on one side.
+   * Plays the "contenderAppear" sound effect.
+   */
+  playContenderSlideDown(element: HTMLElement): Promise<void> {
+    this.audio.play("contenderAppear");
+    return this.animate(element, "anim-slide-down-entrance");
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helper
   // ---------------------------------------------------------------------------

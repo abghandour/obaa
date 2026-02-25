@@ -5,7 +5,7 @@ import { SwipeHandler } from "../logic/SwipeHandler";
 import type { CurtainState } from "../logic/SwipeHandler";
 import {
   iconTrophy, iconClipboard, iconMessage, iconShare,
-  iconSkip, iconBan, iconRecord, iconStop,
+  iconBan, iconRecord, iconStop,
   iconClose, iconTrash, addRipple, verdictIcon,
 } from "./icons";
 
@@ -27,7 +27,6 @@ export class MatchupScreenView {
   private optionAImage: HTMLImageElement | null = null;
   private optionBImage: HTMLImageElement | null = null;
   private tapCallback: ((option: "a" | "b") => void) | null = null;
-  private passCallback: (() => void) | null = null;
   private headerClickCallback: (() => void) | null = null;
   private resultsCallback: (() => void) | null = null;
   private recordCallback: (() => void) | null = null;
@@ -36,8 +35,6 @@ export class MatchupScreenView {
   private recordButton: HTMLButtonElement | null = null;
   private battleCounter: HTMLSpanElement | null = null;
   private recordRow: HTMLDivElement | null = null;
-  private passButtonElement: HTMLButtonElement | null = null;
-  private passRow: HTMLDivElement | null = null;
   private topBar: HTMLDivElement | null = null;
   private battleLabel: HTMLSpanElement | null = null;
 
@@ -46,7 +43,6 @@ export class MatchupScreenView {
   }
 
   onOptionTap(callback: (option: "a" | "b") => void): void { this.tapCallback = callback; }
-  onPass(callback: () => void): void { this.passCallback = callback; }
   onHeaderClick(callback: () => void): void { this.headerClickCallback = callback; }
   onResultsClick(callback: () => void): void { this.resultsCallback = callback; }
   onRecord(callback: () => void): void { this.recordCallback = callback; }
@@ -83,8 +79,6 @@ export class MatchupScreenView {
     label.className = "replay-progress";
     label.textContent = `Match ${current} / ${total}`;
     this.recordRow.appendChild(label);
-    if (this.passButtonElement) this.passButtonElement.style.display = "none";
-    if (this.passRow) this.passRow.style.display = "none";
   }
 
   showRecordButton(): void {
@@ -117,8 +111,6 @@ export class MatchupScreenView {
     meta.appendChild(label);
     meta.appendChild(counter);
     this.recordRow.appendChild(meta);
-    if (this.passButtonElement) this.passButtonElement.style.display = "";
-    if (this.passRow) this.passRow.style.display = "";
   }
 
   async preloadEntries(optionA: Entry, optionB: Entry): Promise<void> {
@@ -185,15 +177,7 @@ export class MatchupScreenView {
     addRipple(ignoreRightBtn);
     colB.append(labelB, ignoreRightBtn);
 
-    const passButton = document.createElement("button");
-    passButton.className = "pass-button";
-    passButton.innerHTML = `${iconSkip}<span>Pass</span>`;
-    passButton.addEventListener("click", () => this.passCallback?.());
-    addRipple(passButton);
-    this.passButtonElement = passButton;
-
     labelsRow.append(colA, colB);
-    this.passRow = labelsRow;
     this.container.appendChild(labelsRow);
 
     this.optionAImage = this.optionAElement.querySelector<HTMLImageElement>(".option-image");
@@ -298,15 +282,19 @@ export class MatchupScreenView {
       empty.textContent = "No battles yet.";
       modal.appendChild(empty);
     } else {
-      const list = document.createElement("ol");
-      list.className = "results-list";
+      const table = document.createElement("table");
+      table.className = "recording-table results-leaderboard";
       for (const entry of results) {
-        const li = document.createElement("li");
-        li.className = "results-item";
-        li.textContent = `${entry.name} — ${entry.wins} win${entry.wins !== 1 ? "s" : ""}`;
-        list.appendChild(li);
+        const tr = document.createElement("tr");
+        const tdName = document.createElement("td");
+        tdName.textContent = entry.name;
+        const tdWins = document.createElement("td");
+        tdWins.className = "results-wins";
+        tdWins.textContent = `${entry.wins}`;
+        tr.append(tdName, tdWins);
+        table.appendChild(tr);
       }
-      modal.appendChild(list);
+      modal.appendChild(table);
     }
 
     const btnRow = document.createElement("div");
@@ -397,15 +385,11 @@ export class MatchupScreenView {
       const tr = document.createElement("tr");
       const tdA = document.createElement("td");
       tdA.textContent = m.entryA;
-      const tdAx = document.createElement("td");
-      tdAx.textContent = m.winner === m.entryA ? "✓" : "";
-      tdAx.className = "winner-mark";
+      if (m.winner === m.entryA) tdA.className = "recording-winner";
       const tdB = document.createElement("td");
       tdB.textContent = m.entryB;
-      const tdBx = document.createElement("td");
-      tdBx.textContent = m.winner === m.entryB ? "✓" : "";
-      tdBx.className = "winner-mark";
-      tr.append(tdA, tdAx, tdB, tdBx);
+      if (m.winner === m.entryB) tdB.className = "recording-winner";
+      tr.append(tdA, tdB);
       table.appendChild(tr);
     }
     modal.appendChild(table);
@@ -592,6 +576,46 @@ export class MatchupScreenView {
   }
 
   /**
+   * Replace only the loser's side with a new contender element,
+   * keeping the winner fully visible in place.
+   * Returns the new contender element for animation.
+   */
+  swapContender(contender: Entry, loserSide: "a" | "b"): HTMLDivElement {
+    const area = this.container.querySelector<HTMLElement>(".matchup-area");
+    if (!area) throw new Error("No matchup area found");
+
+    // Make winner fully visible (no clip-path)
+    const winnerEl = loserSide === "a" ? this.optionBElement : this.optionAElement;
+    if (winnerEl) {
+      winnerEl.style.clipPath = "none";
+      winnerEl.style.zIndex = "1";
+    }
+
+    // Create new contender on the loser's side with its curtain clip-path
+    const side = loserSide;
+    const newEl = this.createOptionElement(contender, side);
+    newEl.style.clipPath = side === "a" ? "inset(0 50% 0 0)" : "inset(0 0 0 50%)";
+    newEl.style.zIndex = "10";
+    area.appendChild(newEl);
+
+    // Update label for the replaced side
+    const labels = this.container.querySelectorAll<HTMLElement>(".option-label");
+    const labelIdx = side === "a" ? 0 : 1;
+    if (labels[labelIdx]) labels[labelIdx]!.innerHTML = contender.name.replace(/\s*-\s*/g, "<br>");
+
+    // Update refs
+    if (side === "a") {
+      this.optionAElement = newEl;
+      this.optionAImage = newEl.querySelector<HTMLImageElement>(".option-image");
+    } else {
+      this.optionBElement = newEl;
+      this.optionBImage = newEl.querySelector<HTMLImageElement>(".option-image");
+    }
+
+    return newEl;
+  }
+
+  /**
    * Swap the option entries inside the existing matchup area.
    * Old options stay visible underneath while new ones are added on top
    * (ready for a slide-down animation). Also updates labels.
@@ -638,9 +662,33 @@ export class MatchupScreenView {
   }
 
   /**
+   * Remove only the old element for a specific side (used after swapContender).
+   * The new element for that side has already been appended and stored in the ref.
+   * Also restores curtain clip-path on both current elements.
+   */
+  cleanupLoserElement(): void {
+    const area = this.container.querySelector<HTMLElement>(".matchup-area");
+    if (!area) return;
+    const all = area.querySelectorAll<HTMLElement>(".option-container");
+    all.forEach(el => {
+      if (el !== this.optionAElement && el !== this.optionBElement) {
+        el.remove();
+      }
+    });
+    // Restore curtain clip-path and z-index
+    if (this.optionAElement) {
+      this.optionAElement.style.clipPath = "inset(0 50% 0 0)";
+      this.optionAElement.style.zIndex = "1";
+    }
+    if (this.optionBElement) {
+      this.optionBElement.style.clipPath = "inset(0 0 0 50%)";
+      this.optionBElement.style.zIndex = "1";
+    }
+  }
+
+  /**
    * Remove old (stale) option containers from the matchup area,
-   * keeping only the current ones. Restores curtain clip-path
-   * and re-attaches the swipe handler.
+   * keeping only the current ones. Resets z-index.
    */
   cleanupOldOptions(): void {
     const area = this.container.querySelector<HTMLElement>(".matchup-area");

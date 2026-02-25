@@ -344,6 +344,9 @@ button .btn-icon svg {
 }
 
 .ignore-button {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
   min-height: 36px;
   padding: var(--spacing-xs) var(--spacing-sm);
   border: 1px solid rgba(255, 255, 255, 0.05);

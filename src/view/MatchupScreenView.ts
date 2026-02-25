@@ -6,7 +6,7 @@ import type { CurtainState } from "../logic/SwipeHandler";
 import {
   iconTrophy, iconClipboard, iconMessage, iconShare,
   iconBan, iconRecord, iconStop,
-  iconClose, iconTrash, addRipple, verdictIcon,
+  iconClose, iconTrash, addRipple, addFastTap, verdictIcon,
 } from "./icons";
 
 function preloadImage(url: string): Promise<void> {
@@ -161,7 +161,7 @@ export class MatchupScreenView {
     const ignoreLeftBtn = document.createElement("button");
     ignoreLeftBtn.className = "ignore-button";
     ignoreLeftBtn.innerHTML = `${iconBan}<span>Don't Know</span>`;
-    ignoreLeftBtn.addEventListener("click", () => this.ignoreCallback?.("a"));
+    addFastTap(ignoreLeftBtn, () => this.ignoreCallback?.("a"));
     addRipple(ignoreLeftBtn);
     colA.append(labelA, ignoreLeftBtn);
 
@@ -173,7 +173,7 @@ export class MatchupScreenView {
     const ignoreRightBtn = document.createElement("button");
     ignoreRightBtn.className = "ignore-button";
     ignoreRightBtn.innerHTML = `${iconBan}<span>Don't Know</span>`;
-    ignoreRightBtn.addEventListener("click", () => this.ignoreCallback?.("b"));
+    addFastTap(ignoreRightBtn, () => this.ignoreCallback?.("b"));
     addRipple(ignoreRightBtn);
     colB.append(labelB, ignoreRightBtn);
 

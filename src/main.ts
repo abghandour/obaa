@@ -69,6 +69,22 @@ async function main() {
     }
   });
 
+  // --- Helper: shorten a URL via CleanURI, fallback to original ---
+  async function shortenUrl(url: string): Promise<string> {
+    try {
+      const res = await fetch("https://cleanuri.com/api/v1/shorten", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `url=${encodeURIComponent(url)}`,
+      });
+      if (!res.ok) return url;
+      const data = await res.json() as { result_url?: string };
+      return data.result_url ?? url;
+    } catch {
+      return url;
+    }
+  }
+
   // --- Helper: stop recording and show share modal ---
   async function stopRecordingAndShare(): Promise<void> {
     recording.stop();
@@ -79,7 +95,8 @@ async function main() {
     const arena = entryDb.getArena(gameState.selectedArenaId);
     const arenaName = arena?.name ?? "Arena";
     const encoded = await RecordingSession.encode(gameState.selectedArenaId, matches);
-    const shareUrl = `${window.location.origin}${window.location.pathname}#/arena/${gameState.selectedArenaId}?replay=${encoded}`;
+    const longUrl = `${window.location.origin}${window.location.pathname}#/arena/${gameState.selectedArenaId}?replay=${encoded}`;
+    const shareUrl = await shortenUrl(longUrl);
 
     matchupScreenView.showRecordingModal(matches, arenaName, shareUrl, async () => {
       try {
@@ -324,30 +341,10 @@ async function main() {
       matchupScreenView.resetCurtain();
     });
 
-    // Record/Stop button
+    // Record/Stop button — restarts a fresh recording session
     matchupScreenView.onRecord(async () => {
       if (!gameState.selectedArenaId) return;
-
-      // Reset to a clean state: clear arena history, ignored entries
-      history.clearArena(gameState.selectedArenaId);
-      await history.save();
-      gameState.ignoredEntries.clear();
-
-      recording.start();
-      matchupScreenView.setRecording(true);
-      matchupScreenView.updateBattleCount(0);
-
-      // Pick a fresh matchup
-      const matchup = matchupEngine.pickInitialMatchup(gameState.selectedArenaId, gameState.ignoredEntries);
-      if (!matchup) return;
-
-      const arena = entryDb.getArena(gameState.selectedArenaId);
-      if (!arena) return;
-
-      gameState.currentMatchup = matchup;
-      await matchupScreenView.preloadEntries(matchup.optionA, matchup.optionB);
-      matchupScreenView.render(arena.battleground, arena.name, matchup.optionA, matchup.optionB);
-      wireGameplayLoop();
+      await startRecordingSession(gameState.selectedArenaId);
     });
 
     matchupScreenView.onStop(async () => {
@@ -392,6 +389,33 @@ async function main() {
     matchupScreenView.setReplayProgress(1, matches.length);
   }
 
+  // --- Helper: start a fresh recording session for an arena ---
+  async function startRecordingSession(arenaId: string): Promise<void> {
+    const arena = entryDb.getArena(arenaId);
+    if (!arena) return;
+
+    history.clearArena(arenaId);
+    await history.save();
+    gameState.ignoredEntries.clear();
+    gameState.currentScreen = "matchup";
+    gameState.selectedArenaId = arenaId;
+
+    recording.start();
+
+    const matchup = matchupEngine.pickInitialMatchup(arenaId, gameState.ignoredEntries);
+    if (!matchup) {
+      matchupScreenView.showExhaustedMessage(`All matchups complete in ${arena.name}!`);
+      return;
+    }
+
+    gameState.currentMatchup = matchup;
+    await matchupScreenView.preloadEntries(matchup.optionA, matchup.optionB);
+    matchupScreenView.render(arena.battleground, arena.name, matchup.optionA, matchup.optionB);
+    wireGameplayLoop();
+    matchupScreenView.setRecording(true);
+    matchupScreenView.updateBattleCount(0);
+  }
+
   // --- Route change handler ---
   router.onRouteChange(async (route) => {
     // Reset replay state on any navigation
@@ -421,21 +445,7 @@ async function main() {
         return;
       }
 
-      gameState.currentScreen = "matchup";
-      gameState.selectedArenaId = route.arenaId;
-
-      const matchup = matchupEngine.pickInitialMatchup(route.arenaId, gameState.ignoredEntries);
-      if (!matchup) {
-        matchupScreenView.showExhaustedMessage(
-          `All matchups complete in ${arena.name}!`
-        );
-        return;
-      }
-
-      gameState.currentMatchup = matchup;
-      await matchupScreenView.preloadEntries(matchup.optionA, matchup.optionB);
-      matchupScreenView.render(arena.battleground, arena.name, matchup.optionA, matchup.optionB);
-      wireGameplayLoop();
+      await startRecordingSession(route.arenaId);
     }
   });
 
@@ -457,23 +467,7 @@ async function main() {
         router.navigate({ screen: "main" });
       }
     } else {
-      const arena = entryDb.getArena(initialRoute.arenaId);
-      if (arena) {
-        gameState.currentScreen = "matchup";
-        gameState.selectedArenaId = initialRoute.arenaId;
-
-        const matchup = matchupEngine.pickInitialMatchup(initialRoute.arenaId, gameState.ignoredEntries);
-        if (matchup) {
-          gameState.currentMatchup = matchup;
-          await matchupScreenView.preloadEntries(matchup.optionA, matchup.optionB);
-          matchupScreenView.render(arena.battleground, arena.name, matchup.optionA, matchup.optionB);
-          wireGameplayLoop();
-        } else {
-          matchupScreenView.showExhaustedMessage(`All matchups complete in ${arena.name}!`);
-        }
-      } else {
-        router.navigate({ screen: "main" });
-      }
+      await startRecordingSession(initialRoute.arenaId);
     }
   } else {
     mainPageView.render(entryDb.getAllArenas());

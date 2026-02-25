@@ -61,6 +61,23 @@ export const iconTrash = wrap(
 );
 
 /**
+ * Fast-tap: fires immediately on touchend (preventing the 300ms click delay)
+ * and falls back to click on non-touch devices. Prevents the sticky highlight.
+ */
+export function addFastTap(button: HTMLElement, handler: () => void): void {
+  let touched = false;
+  button.addEventListener("touchend", (e) => {
+    e.preventDefault(); // block the synthetic click
+    touched = true;
+    handler();
+    setTimeout(() => { touched = false; }, 500);
+  }, { passive: false });
+  button.addEventListener("click", () => {
+    if (!touched) handler();
+  });
+}
+
+/**
  * Attach a ripple effect to a button on click.
  */
 export function addRipple(button: HTMLElement): void {
